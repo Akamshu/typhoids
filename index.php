@@ -104,7 +104,7 @@ if (!$output) {
                 <img src="assets/images/virus.png" height="45" alt="">
             </div>
             <div>
-                <div class="h6 mb-0 fw-bold me-3">Philippines | <span class="fw-light">Covid 19 Update</span></div>
+                <div class="h6 mb-0 fw-bold me-3">Nigeria | <span class="fw-light">Covid 19 Update</span></div>
                 <div class="smallTxt">As of <?= date('F d, Y') ?> </div>
             </div>
 
@@ -135,7 +135,7 @@ if (!$output) {
             </div>
 
             <div>
-                <div class="h6 mb-0 fw-bold me-3">Philippines | <span class="fw-light">Covid 19 Update</span></div>
+                <div class="h6 mb-0 fw-bold me-3">Nigeria | <span class="fw-light">Covid 19 Update</span></div>
                 <div class="smallTxt">As of <?= date('F d, Y') ?> </div>
             </div>
             <div class="ms-auto d-flex align-items-center justify-content-start ">

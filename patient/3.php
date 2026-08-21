@@ -1,35 +1,30 @@
 <?php
 session_start();
 include('../php/db_config.php');
-include('../php/token.php');
 
 if (isset($_SESSION['userType'])) {
     if ($_SESSION['userType'] != 3) {
         header('Location: ../login.php');
+        exit();
     }
 } else {
     header('Location: ../login.php');
+    exit();
 }
 
-$token = new token();
-$data = $token->getTokenNow($conn);
-$token = $data['1'];
-$tokenID = $data['0'];
-$symptoms = $_SESSION['symptoms'];
+$symptoms = $_SESSION['symptoms'] ?? [];
 $arr = [];
 foreach ($symptoms as $item) {
-    array_push($arr, $item[0]);
+    if (isset($item[0])) {
+        array_push($arr, $item[0]);
+    }
 }
 
-$dateOfBirth = $_SESSION['user']['birthday'];
+$dateOfBirth = $_SESSION['user']['birthday'] ?? date("Y-m-d");
 $today = date("Y-m-d");
 $diff = date_diff(date_create($dateOfBirth), date_create($today));
-$age = $diff->format('%y');
-if ($_SESSION['user']['gender'] == 0) {
-    $gender = 'male';
-} else {
-    $gender = 'female';
-}
+$age = (int)$diff->format('%y');
+$gender = ($_SESSION['user']['gender'] == 0) ? 'male' : 'female';
 
 ?>
 
@@ -63,22 +58,14 @@ if ($_SESSION['user']['gender'] == 0) {
 
                         <div class="h4 fw-bolder">Check Health</div>
                         <div class="p-2 round-1 bg-light text-dark shadow-sm mb-4">
-                            <div class="d-flex align-items-center " style="overflow-x: auto">
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    1
-                                </div>
+                            <div class="d-flex align-items-center" style="overflow-x: auto">
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">1</div>
                                 <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Terms of Service</div>
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    2
-                                </div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">2</div>
                                 <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Select symptoms</div>
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    3
-                                </div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">3</div>
                                 <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Refine symptoms</div>
-                                <div class="h6 mb-0 py-2 px-3 bg-light round-1 text-muted">
-                                    4
-                                </div>
+                                <div class="h6 mb-0 py-2 px-3 bg-light round-1 text-muted">4</div>
                             </div>
                         </div>
                         <div class="row">
@@ -87,77 +74,44 @@ if ($_SESSION['user']['gender'] == 0) {
                                 <div class="smallTxt mb-3">Select below if necessary.</div>
 
                                 <?php
-
-                                $token = $token . "&format=json&language=en-gb";
-
-                                $url = "https://healthservice.priaid.ch/symptoms/proposed?symptoms=" . json_encode($arr) . "&gender=$gender&year_of_birth=$age&token=" . $token;
-
-                                // echo $url;
-                                //  Initiate curl
-                                $ch = curl_init();
-                                // Will return the response, if false it print the response
-                                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                                // Set the url
-                                curl_setopt($ch, CURLOPT_URL, $url);
-                                // Execute
-                                $result = curl_exec($ch);
-                                // Closing
-                                curl_close($ch);
-
-                                // Will dump a beauty json :3
-                                // var_dump(json_decode($result, true));
-
-                                $output = json_decode($result);
-
-                                if (count($output) != 0) {
-                                    foreach ($output as $row) {
-                                ?>
-                                        <!-- <div class="mb-2">
-                                        <input class="form-check-input" type="radio" name="symptom[]" value="<?= $row->ID ?>" />
-                                        <label class="form-check-label" for="">
-                                            <?= $row->Name ?>
-                                        </label>
-                                    </div> -->
-
-
-                                <?php
-                                        echo '  <li class="list-group-item border-0" onclick="addSymptom(\'' . $row->ID . '\',\'' . $row->Name . '\')" style="cursor: pointer"><div class="mb-0 h6">' . $row->Name . '</div>';
+                                // Fetch symptoms directly from local database without API call
+                                $output = [];
+                                if (!empty($arr)) {
+                                    $symptomIds = implode(',', array_map('intval', $arr));
+                                    $sql = "SELECT id AS ID, name AS Name FROM symptoms WHERE id NOT IN ($symptomIds) LIMIT 10";
+                                    $res = mysqli_query($conn, $sql);
+                                    if ($res) {
+                                        while ($r = $res->fetch_assoc()) {
+                                            $output[] = (object)$r;
+                                        }
                                     }
-                                } else {
-                                    echo "Sorry, we cannot distinguised the relationship of your symptoms. Please go back and refine symptoms. ";
-                                    echo '  <script>
-                                window.location.href = "2.php?status=2";
-                            </script>';
-                                    $isReady = 1;
                                 }
 
-                                $sql = "SELECT * FROM tokens WHERE tokenID = $tokenID";
-                                $tokenData = mysqli_query($conn, $sql)->fetch_assoc();
-                                $requests = $tokenData['no_request'];
-                                if ($requests == 99) {
-                                    $date = date('Y-m-d');
-
-                                    $sql = "UPDATE tokens SET no_request = 0, date_ended = '$date' WHERE tokenID = $tokenID";
-                                    mysqli_query($conn, $sql);
+                                if (is_array($output) && count($output) > 0) {
+                                    echo '<ul class="list-group mb-3">';
+                                    foreach ($output as $row) {
+                                        if (isset($row->ID) && isset($row->Name)) {
+                                            echo '<li class="list-group-item border-0" onclick="addSymptom(\'' . htmlspecialchars($row->ID, ENT_QUOTES) . '\',\'' . htmlspecialchars($row->Name, ENT_QUOTES) . '\')" style="cursor: pointer"><div class="mb-0 h6">' . htmlspecialchars($row->Name) . '</div></li>';
+                                        }
+                                    }
+                                    echo '</ul>';
                                 } else {
-                                    $sql = "UPDATE tokens SET no_request = ($requests+1) WHERE tokenID = $tokenID";
-                                    mysqli_query($conn, $sql);
+                                    echo '<div class="alert alert-warning">No additional symptoms to refine. Click next to continue.</div>';
                                 }
-
                                 ?>
                             </div>
 
                             <div class="col-md-5">
                                 <div class="smallTxt text-muted mb-3">
-                                    <i class="fas fa-info-circle"></i> Symptoms you have added appears here.
+                                    <i class="fas fa-info-circle"></i> Symptoms you have added appear here.
                                 </div>
                                 <div id="mySymptoms"></div>
                             </div>
 
                         </div>
                     </div>
-                    <div class="text-end">
-                        <a id="next" class="btn btn-primary">Next </a>
+                    <div class="text-end pe-3">
+                        <a id="next" class="btn btn-primary">Next</a>
                     </div>
                 </div>
             </div>
@@ -169,7 +123,6 @@ if ($_SESSION['user']['gender'] == 0) {
     <script>
         $("#navcheck").addClass("bg-info text-white shadow");
         $("#next").click(function() {
-
             $("#loader").removeClass("d-none");
             window.location.href = "4.php";
         });
@@ -178,7 +131,7 @@ if ($_SESSION['user']['gender'] == 0) {
             $.post(
                 "../ajax/addSymptom.php", {
                     id: id,
-                    name: name,
+                    name: name
                 },
                 function(data) {
                     if (data == 1) {
@@ -192,8 +145,6 @@ if ($_SESSION['user']['gender'] == 0) {
         }
         $("#mySymptoms").load("../ajax/loadMySymptoms.php");
     </script>
-
-
 </body>
 
 </html>

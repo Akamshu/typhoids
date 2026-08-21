@@ -1,37 +1,44 @@
 <?php
 session_start();
 include('../php/db_config.php');
-include('../php/token.php');
+
 if (isset($_SESSION['userType'])) {
     if ($_SESSION['userType'] != 3) {
         header('Location: ../login.php');
+        exit();
     }
 } else {
     header('Location: ../login.php');
+    exit();
 }
 
 date_default_timezone_set("Asia/Manila");
 
-$token = new token();
-$data = $token->getTokenNow($conn);
-$token = $data['1'];
-$tokenID = $data['0'];
-$symptoms = $_SESSION['symptoms'];
+// Extract session symptoms safely for JSON encoding
+$symptoms = $_SESSION['symptoms'] ?? [];
 $arr = [];
 foreach ($symptoms as $item) {
-    array_push($arr, $item[0]);
-}
-$id = $_SESSION['user']['userID'];
-$dateOfBirth = $_SESSION['user']['birthday'];
-$today = date("Y-m-d");
-$diff = date_diff(date_create($dateOfBirth), date_create($today));
-$age = $diff->format('%y');
-if ($_SESSION['user']['gender'] == 0) {
-    $gender = 'male';
-} else {
-    $gender = 'female';
+    if (is_array($item)) {
+        if (isset($item[1]) && !is_numeric($item[1])) {
+            $arr[] = $item[1];
+        } elseif (isset($item['name'])) {
+            $arr[] = $item['name'];
+        } elseif (isset($item['symptom'])) {
+            $arr[] = $item['symptom'];
+        } elseif (isset($item[0])) {
+            $arr[] = $item[0];
+        }
+    } else {
+        $arr[] = $item;
+    }
 }
 
+$id = $_SESSION['user']['userID'];
+$dateOfBirth = $_SESSION['user']['birthday'] ?? date("Y-m-d");
+$today = date("Y-m-d");
+$diff = date_diff(date_create($dateOfBirth), date_create($today));
+$age = (int)$diff->format('%y');
+$gender = ($_SESSION['user']['gender'] == 0) ? 'male' : 'female';
 
 ?>
 
@@ -61,27 +68,13 @@ if ($_SESSION['user']['gender'] == 0) {
                         <div class="h4 fw-bolder">Check Health</div>
                         <div class="p-2 round-1 bg-light text-dark shadow-sm mb-4" style="overflow-x: auto">
                             <div class="d-flex align-items-center">
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    1
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">
-                                    Terms of Service
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    2
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">
-                                    Select symptoms
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    3
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">
-                                    Refine symptoms
-                                </div>
-                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">
-                                    4
-                                </div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">1</div>
+                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Terms of Service</div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">2</div>
+                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Select symptoms</div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">3</div>
+                                <div class="h6 mb-0 py-2 px-3 me-2 text-nowrap">Refine symptoms</div>
+                                <div class="h6 mb-0 py-2 px-3 bg-info round-1 text-white">4</div>
                                 <div class="h6 mb-0 py-2 px-3 me-2">Diagnosis</div>
                             </div>
                         </div>
@@ -93,139 +86,139 @@ if ($_SESSION['user']['gender'] == 0) {
                                     <div class="card-body">
                                         <div class="h5 fw-bold">Results</div>
                                         <div class="smallTxt text-muted mb-3">
-                                            Please note that the list below may not be complete and is provided solely for informational purposes and is not qualified medical opinion.
+                                            Please note that the list below may not be complete and is provided solely for informational purposes and is not a qualified medical opinion.
                                         </div>
                                         <?php
+                                        $date = date("Y-m-d H:i:s");
+                                        $raw_output = [];
 
-                                        $token = $token . "&format=json&language=en-gb";
-
-                                        $url = "https://healthservice.priaid.ch/diagnosis?symptoms=" . json_encode($arr) . "&gender=$gender&year_of_birth=$age&token=" . $token;
-                                        // echo $url;
-                                        //  Initiate curl
-                                        $ch = curl_init();
-                                        // Will return the response, if false it print the response
-                                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                                        // Set the url
-                                        curl_setopt($ch, CURLOPT_URL, $url);
-                                        // Execute
-                                        $result = curl_exec($ch);
-                                        // Closing
-                                        curl_close($ch);
-                                        $date =  date("Y-m-d H:i:s");
-                                        // Will dump a beauty json :3
-                                        // var_dump(json_decode($result, true));
-                                        $symp = $conn->real_escape_string(json_encode($arr));
-                                        $test = $conn->real_escape_string($result);
-                                        $output = json_decode($result);
-
-
-                                        $doc = [];
-                                        $sql = "SELECT * FROM healthissues WHERE issueID > 999";
+                                        // Query local health issues database table
+                                        $sql = "SELECT * FROM healthissues";
                                         $result = mysqli_query($conn, $sql);
-                                        if ($result->num_rows > 0) {
+
+                                        if ($result && $result->num_rows > 0) {
                                             while ($row = $result->fetch_assoc()) {
-                                                $sym = explode(',', $row['possibleSymptoms']);
+
+                                                // Clean and parse DB symptoms into an array
+                                                $dbSymptomsList = array_filter(array_map('trim', explode(',', strtolower($row['possibleSymptoms']))));
+                                                
+                                                if (empty($dbSymptomsList)) {
+                                                    continue;
+                                                }
+
                                                 $possibility = 0;
-                                                for ($x = 0; $x < count($symptoms); $x++) {
-                                                    for ($y = 0; $y < count($sym); $y++) {
-                                                        if ($symptoms[$x][1] == $sym[$y]) {
+
+                                                // Evaluate each user symptom
+                                                foreach ($symptoms as $userSymptom) {
+                                                    $userSymName = '';
+
+                                                    if (is_array($userSymptom)) {
+                                                        if (isset($userSymptom[1]) && !is_numeric($userSymptom[1])) {
+                                                            $userSymName = $userSymptom[1];
+                                                        } elseif (isset($userSymptom['name'])) {
+                                                            $userSymName = $userSymptom['name'];
+                                                        } elseif (isset($userSymptom['symptom'])) {
+                                                            $userSymName = $userSymptom['symptom'];
+                                                        } elseif (isset($userSymptom[0])) {
+                                                            $userSymName = $userSymptom[0];
+                                                        }
+                                                    } else {
+                                                        $userSymName = $userSymptom;
+                                                    }
+
+                                                    $userSymName = strtolower(trim((string)$userSymName));
+                                                    if ($userSymName === '') continue;
+
+                                                    // Comparison logic
+                                                    foreach ($dbSymptomsList as $dbSym) {
+                                                        if ($dbSym === $userSymName || stripos($dbSym, $userSymName) !== false || stripos($userSymName, $dbSym) !== false) {
                                                             $possibility++;
+                                                            break; // Prevent double-counting the same user symptom
                                                         }
                                                     }
                                                 }
 
+                                                // Collect results with score
+                                                if ($possibility > 0) {
+                                                    $specializationName = !empty($row['specialization']) ? $row['specialization'] : "General Practice";
 
-                                                $p = ($possibility / count($sym)) * 100;
-                                                // echo $possibility;
-                                                if ($p > 20) {
-                                                    $aaa = (object) array("Issue" => (object) array("ID" => $row['issueID'], "Name" => $row['issueName'], "IcdName" => ''), "Specialisation" =>  array((object) array("Name" => "General Practice")));
-
-                                                    array_unshift($output, $aaa);
+                                                    $raw_output[] = [
+                                                        'score' => $possibility,
+                                                        'data' => (object) array(
+                                                            "Issue" => (object) array(
+                                                                "ID" => $row['issueID'],
+                                                                "Name" => $row['issueName'],
+                                                                "IcdName" => ''
+                                                            ),
+                                                            "Specialisation" => array(
+                                                                (object) array("Name" => $specializationName)
+                                                            )
+                                                        )
+                                                    ];
                                                 }
                                             }
                                         }
 
+                                        // Rank conditions by highest symptom match count
+                                        usort($raw_output, function($a, $b) {
+                                            return $b['score'] <=> $a['score'];
+                                        });
 
+                                        $output = array_column($raw_output, 'data');
 
+                                        $doc = [];
+                                        $last_id = 0;
 
-
-
-                                        // print_r($output);
-                                        // print_r($output);
-                                        //special code
-
-                                        $last_id;
                                         if (count($output) != 0) {
+                                            $symp = $conn->real_escape_string(json_encode($arr));
+                                            $outJson = $conn->real_escape_string(json_encode($output));
 
-
-
-
-                                            $sql = "INSERT INTO diagnosis VALUES (null, $id, '$symp', '" . json_encode($output) . "','', '$date')";
+                                            $sql = "INSERT INTO diagnosis VALUES (null, $id, '$symp', '$outJson', '', '$date')";
                                             mysqli_query($conn, $sql);
-
                                             $last_id = $conn->insert_id;
-                                            echo $conn->error;
+
                                             $count = 0;
                                             foreach ($output as $row) {
                                                 if ($count == 3) break;
                                                 $obj1 = $row->Issue;
-                                                $obj2 = $row->Specialisation; ?>
+                                                $obj2 = $row->Specialisation; 
+                                        ?>
 
                                                 <div class="card round-1 border-0 mb-3">
                                                     <div class="card-body">
                                                         <a href="view.php?id=<?= $obj1->ID ?>" class="float-end text-decoration-none smallTxt">View <i class="fas fa-angle-right"></i></a>
                                                         <div class="d-flex">
                                                             <div class="me-3">
-                                                                <div class="d-flex align-items-center justify-content-center round-2 shadow-2 " style=" width: 50px; height: 50px; border: 3px solid ">
+                                                                <div class="d-flex align-items-center justify-content-center round-2 shadow-2 " style="width: 50px; height: 50px; border: 3px solid ">
                                                                     <div class="h4 mb-0"><?= ++$count ?></div>
                                                                 </div>
                                                             </div>
                                                             <div>
                                                                 <div class="h6 fw-bold mb-0">
-                                                                    <?= $obj1->Name ?>
+                                                                    <?= htmlspecialchars($obj1->Name) ?>
                                                                 </div>
-                                                                <!-- <div class="h6 mb-3">
-                                                                    <?= $obj1->IcdName ?>
-                                                                </div> -->
                                                                 <div class="smallTxt text-muted">
-                                                                    Recommmended Specialist:
+                                                                    Recommended Specialist:
                                                                 </div>
                                                                 <?php
-                                                                echo $obj2[0]->Name
-                                                                    . "<br />";
-
-
+                                                                echo htmlspecialchars($obj2[0]->Name) . "<br />";
                                                                 array_push($doc, $obj2[0]->Name);
-
                                                                 ?>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                        <?php
 
+                                        <?php
                                             }
                                         } else {
-                                            echo 'Nothing to show, please click next.';
-                                        }
-
-
-                                        $sql = "SELECT * FROM tokens WHERE tokenID = $tokenID";
-                                        $tokenData = mysqli_query($conn, $sql)->fetch_assoc();
-                                        $requests = $tokenData['no_request'];
-                                        if ($requests == 99) {
-                                            $date = date('Y-m-d');
-
-                                            $sql = "UPDATE tokens SET no_request = 0, date_ended = '$date' WHERE tokenID = $tokenID";
-                                            mysqli_query($conn, $sql);
-                                        } else {
-                                            $sql = "UPDATE tokens SET no_request = ($requests+1) WHERE tokenID = $tokenID";
-                                            mysqli_query($conn, $sql);
+                                            echo '<div class="alert alert-info">No matching health conditions found based on selected symptoms.</div>';
                                         }
                                         ?>
                                     </div>
                                 </div>
                             </div>
+
                             <div class="col-md-7">
                                 <div class="p-3">
                                     <div class="text-start">
@@ -238,55 +231,46 @@ if ($_SESSION['user']['gender'] == 0) {
                                     </div>
                                     <div class="smallTxt fw-bold">Recommended Doctor</div>
                                     <?php
-
                                     for ($x = 0; $x < count($doc); $x++) {
-                                        $sql = "SELECT * FROM  useraccount a Inner JOIN doctortbl b ON a.linkedAccount = b.doctorID WHERE a.usertype = 2 AND specialization = '" . $doc[$x] . "'";
+                                        $specEscaped = $conn->real_escape_string($doc[$x]);
+                                        $sql = "SELECT * FROM useraccount a INNER JOIN doctortbl b ON a.linkedAccount = b.doctorID WHERE a.usertype = 2 AND b.specialization = '$specEscaped'";
                                         $result = mysqli_query($conn, $sql);
 
-
-                                        // print_r($doc);
-                                        if ($result->num_rows > 0) {
+                                        if ($result && $result->num_rows > 0) {
                                             $count = 0;
                                             $docs = [];
                                             while ($row = $result->fetch_assoc()) {
-
                                     ?>
-                                                <div class="d-flex p-3 border round-1 align-items-center  mb-2 ">
+                                                <div class="d-flex p-3 border round-1 align-items-center mb-2">
                                                     <div class="me-3">
                                                         <img src="../assets/images/profiledefault.png" height="40" alt="" />
                                                     </div>
-                                                    <div class="">
-
-                                                        <div class="h6 fw-bold mb-0">Dr. <?= $row['firstName'] . " " . $row['lastName'] ?> </div>
-                                                        <div class="smallTxt mb-0"><?= $row['specialization'] ?></div>
+                                                    <div>
+                                                        <div class="h6 fw-bold mb-0">Dr. <?= htmlspecialchars($row['firstName'] . " " . $row['lastName']) ?></div>
+                                                        <div class="smallTxt mb-0"><?= htmlspecialchars($row['specialization']) ?></div>
                                                     </div>
-                                                    <div class="ms-auto align-self-start"><a class="text-primary" style="cursor: pointer" onclick="sendRequest(<?= $row['userAccountID'] ?>)"><i class="far fa-paper-plane"></i></a></div>
-
+                                                    <div class="ms-auto align-self-start">
+                                                        <a class="text-primary" style="cursor: pointer" onclick="sendRequest(<?= $row['userAccountID'] ?>)"><i class="far fa-paper-plane"></i></a>
+                                                    </div>
                                                 </div>
                                     <?php
-
                                                 array_push($docs, $row['userAccountID']);
                                                 ++$count;
                                                 if ($count == 3) break;
                                             }
 
-                                            $sql = "UPDATE diagnosis SET doctor = '" . implode(",", $docs) . "' WHERE id = $last_id";
-                                            mysqli_query($conn, $sql);
+                                            if ($last_id > 0) {
+                                                $docList = $conn->real_escape_string(implode(",", $docs));
+                                                $sql = "UPDATE diagnosis SET doctor = '$docList' WHERE id = $last_id";
+                                                mysqli_query($conn, $sql);
+                                            }
                                             break;
                                         }
                                     }
-
-
                                     ?>
-
-
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="text-end">
-                            <!-- <a href="2.php" class="btn btn-primary">Next
-                            </a> -->
                         </div>
                     </div>
                 </div>
@@ -311,8 +295,6 @@ if ($_SESSION['user']['gender'] == 0) {
                 confirmButtonText: 'Yes'
             }).then((result) => {
                 if (result.isConfirmed) {
-
-
                     $.post('ajax/sendrequest.php', {
                         id: id
                     }, function(data) {
@@ -322,8 +304,7 @@ if ($_SESSION['user']['gender'] == 0) {
                                 'Your request has been submitted.',
                                 'success'
                             );
-                        }
-                        if (data == 0) {
+                        } else if (data == 0) {
                             Swal.fire(
                                 'Oops!',
                                 'You still have active request/consultation.',
@@ -332,7 +313,7 @@ if ($_SESSION['user']['gender'] == 0) {
                         }
                     });
                 }
-            })
+            });
         }
     </script>
 </body>

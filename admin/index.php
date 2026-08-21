@@ -241,8 +241,8 @@ if ($result->num_rows > 0) {
                                                 <img src="../assets/images/virus.png" height="45" alt="">
                                             </div>
                                             <div>
-                                                <div class="h5 mb-0 fw-bold">Philippines | <span class="fw-light">Covid 19 Update</span></div>
-                                                <div class="smallTxt">As of <?= date('F d, Y') ?> | endcov.ph</div>
+                                                <div class="h5 mb-0 fw-bold">Nigeria | <span class="fw-light">Covid 19 Update</span></div>
+                                                <div class="smallTxt">As of <?= date('F d, Y') ?> | </div>
                                             </div>
 
 
